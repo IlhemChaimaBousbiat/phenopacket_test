@@ -1,15 +1,12 @@
-
 import streamlit as st
 import pandas as pd
-from io import StringIO
-from datetime import datetime
-from datetime import time
+from io import BytesIO
+from datetime import datetime, time
 
-# ── 🔐  Password gate ---------------------------------------------------------
-APP_PASSWORD = "Goudielabsecret2025"        
+# ── 🔐  Simple password gate ───────────────────────────────────────────────
+APP_PASSWORD = "Goudielabsecret2025"
 
 def check_password():
-    """Stop the app until the correct password is entered."""
     if "authenticated" not in st.session_state:
         st.session_state.authenticated = False
 
@@ -20,26 +17,32 @@ def check_password():
         else:
             st.stop()
 
-check_password()   
-# ─────────────────────────────────────────────────────────────────────────────
+check_password()
+# ───────────────────────────────────────────────────────────────────────────
 
 st.set_page_config(page_title="Phenopacket Entry", layout="wide")
 
-# ── dropdown choices (with "Select") ────────────────────────────────────────
+# ── dropdown choice lists ─────────────────────────────────────────────────
 dd = {
     "Ind_Sex":   ["", "Male", "Female", "Unknown sex"],
     "Ind_KSex":  ["", "XX", "XY", "XXY", "Other karyotype"],
     "Ind_Vital": ["", "Alive", "Deceased"],
+
     "PF_Excluded": ["", "True", "False"],
     "PF_Severity": ["", "Mild", "Moderate", "Severe"],
+
     "D_Status":   ["", "Ongoing", "Resolved"],
     "D_Severity": ["", "Mild", "Moderate", "Severe"],
+
     "M_Interp":   ["", "High", "Low", "Normal"],
+
     "G_Zygosity":      ["", "Heterozygous", "Homozygous"],
     "G_Pathogenicity": ["", "Benign", "Pathogenic", "Vus"],
     "G_IStatus":       ["", "Causative", "Candidate"],
     "G_Action":        ["", "Actionable", "Not actionable"],
+
     "Med_Type":  ["", "Procedure", "Treatment", "Radiation"],
+
     "P_Relation": ["", "Proband", "Sibling", "Half sibling", "Parent", "Child",
                    "Aunt", "Uncle", "Grandmother", "Grandfather",
                    "First cousin", "Second cousin", "Other"],
@@ -48,7 +51,7 @@ dd = {
     "P_Deceased": ["", "True", "False"],
 }
 
-# ── field sets per section ─────────────────────────────────────────────────
+# ── field sets per section ────────────────────────────────────────────────
 fields = {
     "PF":  ["IndividualID","PhenotypeID","Label","Excluded",
             "Onset","Severity","Evidence","Modifier"],
@@ -62,19 +65,20 @@ fields = {
             "Pathogenicity","InterpretStatus","Actionability"],
     "Med": ["IndividualID","Type","Code","Description","Start","End",
             "Agent","Dose"],
-    "P":   ["FamilyID","IndividualID","Relation","Affected","Sex",
+    "P":   ["FamilyID","Relation","Affected","Sex",
             "Deceased","RelativeCondition"],
 }
 
-def empty_df(cols): return pd.DataFrame(columns=cols)
+def empty_df(cols):
+    return pd.DataFrame(columns=cols)
 
-# ── initialise session-state storage ───────────────────────────────────────
+# ── initialise session-state storage ──────────────────────────────────────
 if "store" not in st.session_state:
     st.session_state.store = {sec: empty_df(cols) for sec, cols in fields.items()}
 if "row_sel" not in st.session_state:
     st.session_state.row_sel = {sec: None for sec in fields}
 
-# ── convenience to add / delete rows ---------------------------------------
+# ── helpers to add / delete rows ──────────────────────────────────────────
 def add_row(sec, row_dict):
     st.session_state.store[sec] = pd.concat(
         [st.session_state.store[sec], pd.DataFrame([row_dict])],
@@ -88,12 +92,13 @@ def del_selected(sec):
         st.session_state.store[sec].reset_index(drop=True, inplace=True)
         st.session_state.row_sel[sec] = None
 
-# ── Individual tab ─────────────────────────────────────────────────────────
+# ── build the UI tabs ─────────────────────────────────────────────────────
 tabs = st.tabs([
     "Individual", "Phenotypic Feature", "Disease", "Measurement",
     "Biosample", "Genomic Interpretation", "Medical Action", "Pedigree", "Download"
 ])
 
+# ── Individual tab ────────────────────────────────────────────────────────
 with tabs[0]:
     st.subheader("Individual")
     ind_id = st.text_input("Individual ID", key="Ind_ID")
@@ -101,24 +106,29 @@ with tabs[0]:
     ind_sex   = st.selectbox("Sex",   dd["Ind_Sex"], key="Ind_Sex")
     ind_ksex  = st.selectbox("Karyotypic Sex", dd["Ind_KSex"], key="Ind_KSex")
     ind_vital = st.selectbox("Vital Status",    dd["Ind_Vital"], key="Ind_Vital")
-    ind_last = st.time_input("Last Encounter (24 h)", value=time(0, 0), key="Ind_Last")
+    ind_last  = st.time_input("Last Encounter (24 h)", value=time(0, 0), key="Ind_Last")
 
-# ── helper to build each data-entry tab ------------------------------------
+# ── helper to construct the data-entry pages for each section ─────────────
 def section_page(tab, key, title, mapping=None):
-    if mapping is None: mapping = {}
+    if mapping is None:
+        mapping = {}
+
     with tab:
         st.subheader(title)
         cols = fields[key]
         inputs = {}
+
+        # Build input widgets row-by-row
         for col in cols:
-            fld = f"{key}_{col}"
+            widget_key = f"{key}_{col}"
             if col == "IndividualID":
-                st.text_input(col, value=ind_id, disabled=True, key=fld)
+                # Auto-fill IndividualID from the value in the first tab
+                st.text_input(col, value=ind_id, disabled=True, key=widget_key)
                 inputs[col] = ind_id
             elif col in mapping:
-                inputs[col] = st.selectbox(col, dd[mapping[col]], key=fld)
+                inputs[col] = st.selectbox(col, dd[mapping[col]], key=widget_key)
             else:
-                inputs[col] = st.text_input(col, key=fld)
+                inputs[col] = st.text_input(col, key=widget_key)
 
         c1, c2 = st.columns(2)
         with c1:
@@ -130,13 +140,18 @@ def section_page(tab, key, title, mapping=None):
 
         df = st.session_state.store[key]
         st.dataframe(df, use_container_width=True)
+
+        # simple row selector for deletion
         if not df.empty:
             st.session_state.row_sel[key] = st.number_input(
-                "Row index to delete", min_value=0, max_value=len(df)-1,
-                step=1, key=f"rowpick_{key}"
+                "Row index to delete",
+                min_value=0,
+                max_value=len(df) - 1,
+                step=1,
+                key=f"rowpick_{key}"
             )
 
-# ── build each section tab --------------------------------------------------
+# ── build each section tab ────────────────────────────────────────────────
 section_page(tabs[1], "PF",  "Phenotypic Feature",
              mapping=dict(Excluded="PF_Excluded", Severity="PF_Severity"))
 section_page(tabs[2], "D",   "Disease",
@@ -153,25 +168,28 @@ section_page(tabs[7], "P",   "Pedigree",
              mapping=dict(Relation="P_Relation", Affected="P_Affected",
                           Sex="P_Sex", Deceased="P_Deceased"))
 
-# ── Download tab ------------------------------------------------------------
+# ── Download tab: export as a multi-sheet Excel workbook ──────────────────
 with tabs[8]:
-    st.subheader("Download all data (single CSV)")
+    st.subheader("Download all data (multi-sheet Excel)")
+
     if st.button("Generate & Download"):
-        frames = []
-        for sec, df in st.session_state.store.items():
-            if not df.empty:
-                out = df.copy()
-                out["Section"] = sec
-                frames.append(out)
-        if frames:
-            csv_buf = StringIO()
-            pd.concat(frames).to_csv(csv_buf, index=False)
-            csv_buf.seek(0)
+        # keep only sections that have at least one row
+        non_empty = {sec: df for sec, df in st.session_state.store.items() if not df.empty}
+
+        if non_empty:
+            buffer = BytesIO()
+            with pd.ExcelWriter(buffer, engine="xlsxwriter") as writer:
+                for sec, df in non_empty.items():
+                    # sheet names are lower-case section keys
+                    df.to_excel(writer, index=False, sheet_name=sec.lower())
+                writer.save()
+
+            buffer.seek(0)
             st.download_button(
-                label="⬇️ Download CSV",
-                data=csv_buf.getvalue(),
-                file_name=f"phenopacket_{datetime.now().date()}.csv",
-                mime="text/csv"
+                label="⬇️ Download Phenopacket workbook (.xlsx)",
+                data=buffer,
+                file_name=f"phenopacket_{datetime.now().date()}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
         else:
             st.info("No data to export yet.")
